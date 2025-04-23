@@ -53,6 +53,8 @@ def extract_director(crew_text):
 
 df['director'] = df['crew'].apply(extract_director)
 
+print(df['cast'])
+
 # Vectorize keywords and genres
 vectorizer = CountVectorizer(stop_words='english')
 keywords_matrix = vectorizer.fit_transform(df['keywords'])
