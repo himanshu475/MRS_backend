@@ -12,9 +12,20 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 movies_path = os.path.join(BASE_DIR, '../data/tmdb_5000_movies.csv')
 credits_path = os.path.join(BASE_DIR, '../data/tmdb_5000_credits.csv')
 
-# Load datasets
+movies_size = os.path.getsize(movies_path) / (1024 * 1024)  # Size in MB
+credits_size = os.path.getsize(credits_path) / (1024 * 1024)  # Size in MB
+
+print(f"Movies file size: {movies_size:.2f} MB")
+print(f"Credits file size: {credits_size:.2f} MB")
+
+# Read movies dataset
 df = pd.read_csv(movies_path)
-credits_df = pd.read_csv(credits_path)
+
+# Read credits dataset in chunks for memory optimization
+chunk_size = 10000
+credits_chunks = pd.read_csv(credits_path, chunksize=chunk_size)
+
+credits_df = pd.concat(credits_chunks, ignore_index=True)
 
 # Merge datasets
 df = df.merge(credits_df, on='title')
@@ -57,8 +68,6 @@ def extract_director(crew_text):
     return ""
 
 df['director'] = df['crew'].apply(extract_director)
-
-print(df['cast'])
 
 # Vectorize keywords and genres
 vectorizer = CountVectorizer(stop_words='english')
