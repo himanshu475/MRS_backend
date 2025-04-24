@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from .content_based import recommend_movie
+from .content_based import recommend_movie, load_and_prepare_data
 
 app = FastAPI()
 
@@ -11,6 +11,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def startup_event():
+    print("🔄 Loading model and data...")
+    load_and_prepare_data()
+    print("✅ Model ready!")
 
 @app.get("/")
 def home():

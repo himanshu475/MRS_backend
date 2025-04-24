@@ -5,98 +5,65 @@ import ast
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Get base directory of the current script
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+df = None
+similarity = None
 
-# Construct full paths to the CSV files
-movies_path = os.path.join(BASE_DIR, '../data/tmdb_5000_movies.csv')
-credits_path = os.path.join(BASE_DIR, '../data/tmdb_5000_credits.csv')
+def load_and_prepare_data():
+    global df, similarity
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-movies_size = os.path.getsize(movies_path) / (1024 * 1024)  # Size in MB
-credits_size = os.path.getsize(credits_path) / (1024 * 1024)  # Size in MB
+    movies_path = os.path.join(BASE_DIR, '../data/tmdb_5000_movies.csv')
+    credits_path = os.path.join(BASE_DIR, '../data/tmdb_5000_credits.csv')
 
-print(f"Movies file size: {movies_size:.2f} MB")
-print(f"Credits file size: {credits_size:.2f} MB")
+    print(f"Movies file size: {os.path.getsize(movies_path) / (1024 * 1024):.2f} MB")
+    print(f"Credits file size: {os.path.getsize(credits_path) / (1024 * 1024):.2f} MB")
 
-# Read movies dataset
-df = pd.read_csv(movies_path)
+    df_movies = pd.read_csv(movies_path)
+    df_credits = pd.read_csv(credits_path)
 
-# Read credits dataset in chunks for memory optimization
-chunk_size = 10000
-credits_chunks = pd.read_csv(credits_path, chunksize=chunk_size)
+    df = df_movies.merge(df_credits, on='title')
 
-credits_df = pd.concat(credits_chunks, ignore_index=True)
+    df['keywords'] = df['keywords'].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else [])
+    df['keywords'] = df['keywords'].apply(lambda x: ' '.join([kw['name'] for kw in x]))
 
-# Merge datasets
-df = df.merge(credits_df, on='title')
+    df['genres'] = df['genres'].apply(lambda x: ' '.join(g['name'] for g in ast.literal_eval(x)) if pd.notna(x) else '')
+    df['cast'] = df['cast'].apply(lambda x: ' '.join(c['name'] for c in ast.literal_eval(x)[:4]) if pd.notna(x) else '')
 
-# Parse and clean keywords
-df['keywords'] = df['keywords'].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else [])
-df['keywords'] = df['keywords'].apply(lambda x: ' '.join([kw['name'] for kw in x]))
-
-# Parse and clean genres
-def parse_genres(text):
-    try:
-        genres = ast.literal_eval(text)
-        return [g['name'] for g in genres]
-    except:
-        return []
-
-df['genres'] = df['genres'].apply(parse_genres)
-df['genres'] = df['genres'].apply(lambda x: ' '.join(x) if isinstance(x, list) else '')
-
-# Parse and clean cast
-def extract_cast(text):
-    try:
-        cast_list = ast.literal_eval(text)
-        return [c['name'] for c in cast_list[:4]]
-    except:
-        return []
-
-df['cast'] = df['cast'].apply(extract_cast)
-df['cast'] = df['cast'].apply(lambda x: ' '.join(x) if isinstance(x, list) else '')
-
-# Parse and extract director from crew
-def extract_director(crew_text):
-    try:
-        crew_list = ast.literal_eval(crew_text)
-        for member in crew_list:
-            if member.get("job") == "Director":
-                return member.get("name")
-    except:
+    def extract_director(crew_text):
+        try:
+            crew_list = ast.literal_eval(crew_text)
+            for member in crew_list:
+                if member.get("job") == "Director":
+                    return member.get("name")
+        except:
+            return ""
         return ""
-    return ""
 
-df['director'] = df['crew'].apply(extract_director)
+    df['director'] = df['crew'].apply(extract_director)
+    df['tags'] = df['keywords'] + ' ' + df['genres'] + ' ' + df['cast'] + ' ' + df['director'].fillna('')
 
-# Vectorize keywords and genres
-vectorizer = CountVectorizer(stop_words='english')
-keywords_matrix = vectorizer.fit_transform(df['keywords'])
-genres_matrix = vectorizer.fit_transform(df['genres'])
+    vectorizer = CountVectorizer(max_features=5000, stop_words='english')
+    vector_matrix = vectorizer.fit_transform(df['tags'])
+    similarity = cosine_similarity(vector_matrix)
 
-# Cosine similarities
-cosine_sim_keywords = cosine_similarity(keywords_matrix, keywords_matrix)
-cosine_sim_genres = cosine_similarity(genres_matrix, genres_matrix)
-combined_similarity = (cosine_sim_keywords + cosine_sim_genres) / 2
-
-# Recommendation function
 def recommend_movie(movie_title, top_n=5):
-    movie_title_lower = movie_title.lower()
-    lowercased_titles = df['title'].str.lower()
-
-    if movie_title_lower not in lowercased_titles.values:
+    if df is None or similarity is None:
         return []
 
-    movie_idx = lowercased_titles[lowercased_titles == movie_title_lower].index[0]
-    similarities = combined_similarity[movie_idx]
-    scored_movies = list(enumerate(similarities))
-    scored_movies = sorted(scored_movies, key=lambda x: x[1], reverse=True)
-    top_movies = scored_movies[1:top_n + 1]
+    movie_title_lower = movie_title.lower()
+    titles = df['title'].str.lower()
+    
+    if movie_title_lower not in titles.values:
+        return []
 
-    recommendations = []
-    for idx, _ in top_movies:
+    index = titles[titles == movie_title_lower].index[0]
+    distances = similarity[index]
+    top_matches = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:top_n+1]
+
+    result = []
+    for idx, _ in top_matches:
         movie = df.iloc[idx]
-        recommendations.append({
+        result.append({
             "title": movie["title"],
             "poster": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if pd.notna(movie.get("poster_path")) else "",
             "rating": str(movie.get("vote_average", "")),
@@ -107,5 +74,4 @@ def recommend_movie(movie_title, top_n=5):
             "plot": movie.get("overview", ""),
             "cast": movie["cast"].split()
         })
-
-    return recommendations
+    return result
