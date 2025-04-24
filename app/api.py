@@ -15,8 +15,12 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     print("🔄 Loading model and data...")
-    load_and_prepare_data()
-    print("✅ Model ready!")
+    try:
+        load_and_prepare_data()
+        print("✅ Model ready!")
+    except Exception as e:
+        print("❌ Error during model loading:", e)
+
 
 @app.get("/")
 def home():
