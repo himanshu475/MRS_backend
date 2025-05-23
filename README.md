@@ -27,7 +27,7 @@ This is a **content-based movie recommendation system** built with **Python** an
 ## 📁 Files Explained
 
 - `content_based.py`: Contains data loading, preprocessing, and the recommendation logic.
-- `main.py`: FastAPI server with defined endpoints and CORS settings.
+- `api.py`: FastAPI server with defined endpoints and CORS settings.
 - `data/`: Folder where `tmdb_5000_movies.csv` and `tmdb_5000_credits.csv` should be placed.
 
 ---
