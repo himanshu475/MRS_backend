@@ -65,7 +65,7 @@ def recommend_movie(movie_title, top_n=5):
         movie = df.iloc[idx]
         result.append({
             "title": movie["title"],
-            "poster": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if pd.notna(movie.get("poster_path")) else "",
+            
             "rating": str(movie.get("vote_average", "")),
             "genre": movie["genres"].split(),
             "year": movie["release_date"].split("-")[0] if pd.notna(movie.get("release_date")) else "",
